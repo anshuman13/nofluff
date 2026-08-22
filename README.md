@@ -1,41 +1,46 @@
-# llm-brevity
+# nofluff
 
-A [Claude Code](https://claude.com/claude-code) skill (`/llm-brevity`) that cuts LLM padding — either compressing a reply after the fact, or switching the session to terse output for good.
+A skill (`/nofluff`) that defines how the assistant writes: direct, active voice, no stage performances, common words, no padding. It is on by default once loaded, and it also compresses existing text on demand.
 
 ## The problem
 
 Ask a model a yes/no question and you get a restatement of your question, a narration of what it's about to check, the answer, a summary of the answer, and an offer to help further. The answer was one word. Everything else is packaging.
 
-This isn't a style preference — padding costs reading time on every single reply, and it buries the one sentence you needed. The skill's core rule is **compress by deleting, not rewriting**: every fact, number, file path, command, and code block survives. Only filler dies. A rewrite that loses content has failed, because that's summarization, and you asked for brevity.
+This isn't a style preference — padding costs reading time on every single reply, and it buries the one sentence you needed. The skill's core rule is **compress by deleting, not rewriting**: every fact, number, file path, command, and code block survives. Only filler dies. A rewrite that loses content has failed, because that's summarization, and you asked for a shorter reply.
+
+## The voice
+
+Four rules, applied to every reply:
+
+- **Direct.** Lead with the answer. No preamble, no restating the question.
+- **Active voice.** "The parser drops the token", not "the token is dropped by the parser".
+- **No stage performances.** No announcing what's about to happen, no labelling a point as interesting, no building to a reveal.
+- **The most common word.** "use" over "utilize", "so" over "as a result", "before" over "prior to".
 
 ## Usage
 
-```
-/llm-brevity [tier] [--on|--off] [text]
-```
-
-With no arguments it compresses the previous reply at the default tier. Paste text after the tier to compress that instead. It also triggers on plain requests like "shorten that" or "you're being too verbose."
-
-| Tier | Target | What survives |
-|------|--------|---------------|
-| `tight` | ~50% | Everything. Pure filler removal, no content judgment. |
-| `terse` (default) | ~25% | Every fact, number, path, and code block. Elaboration and transitions go. |
-| `telegram` | 1–3 sentences | The answer alone, plus any command needed to act on it. |
-
-`tight` and `terse` are lossless on content. `telegram` is the one tier allowed to drop facts.
-
-### Standing mode
+Once loaded the skill is **on by default** — it applies to every reply for the rest of the session with no command needed.
 
 ```
-/llm-brevity --on     # terse output for the rest of the session
-/llm-brevity --off    # back to normal
+/nofluff --off    # back to normal output
+/nofluff --on     # re-enable
 ```
 
-Standing mode applies the rules while writing rather than compressing afterward: answer in the first sentence, no tool-call narration, reply length matched to question complexity.
+It also compresses existing text on demand:
+
+```
+/nofluff              # compress the previous reply
+/nofluff <text>       # compress pasted text
+/nofluff notes.md     # compress a file
+```
+
+It triggers on plain requests too — "shorten that", "you're being too verbose."
+
+There is no word-count target. It cuts until the cut list is exhausted and then stops, losslessly: every fact, number, path, and code block survives, while elaboration and transitions go. A padded draft collapses hard; an already-edited one barely moves.
 
 ## Before / after
 
-A real run at the default `terse` tier, on a genuinely padded draft reply (363 words):
+A real run of the on-demand rewrite on a genuinely padded draft reply (363 words):
 
 **Before:**
 
@@ -57,7 +62,7 @@ A real run at the default `terse` tier, on a genuinely padded draft reply (363 w
 
 Measured against a control — a second agent given the same text and only the instruction "make it shorter," no skill:
 
-| Source | Baseline (no skill) | Skill (`terse`) |
+| Source | Baseline (no skill) | Skill |
 |---|---|---|
 | Padded 363-word draft | 116 words (32%) | 109 words (30%) |
 | Already-edited 251-word reply | 210 words (84%) | 205 words (82%) |
@@ -68,33 +73,31 @@ Two things worth being honest about:
 
 **Its value is the guardrail, not the ratio.** Both skill runs were lossless by construction — the cut list is a fixed set of constructions, and step 5 requires verifying every number, path, and code block survived. The control runs were lossless by luck. On text where a caveat is load-bearing, that difference is the point, and it is also why the skill is worth invoking on someone else's output rather than your own.
 
-**Already-edited text barely compresses, and that is correct.** At 82% the skill is close to a no-op, because there was no filler to remove. A brevity tool that hit 25% on that source would be deleting facts.
+**Already-edited text barely compresses, and that is correct.** At 82% the skill is close to a no-op, because there was no filler to remove. A tool that squeezed that source much further would be deleting facts.
 
 ## Install
 
 ```bash
-git clone https://github.com/anshuman13/llm-brevity
+git clone https://github.com/anshuman13/nofluff
 mkdir -p ~/.claude/skills
-cp -r llm-brevity/llm-brevity ~/.claude/skills/
+cp -r nofluff/nofluff ~/.claude/skills/
 ```
 
-Requirements: Claude Code. No external CLI, no API key, no network calls — the skill is a single `SKILL.md`.
+Requirements: an agent that loads skills from `~/.claude/skills`. No external CLI, no API key, no network calls — the skill is a single `SKILL.md`.
 
-Status: the `terse` tier and one-shot rewrite are tested across two sources with a no-skill control, in fresh sessions that had not seen the skill written. `tight`, `telegram`, and standing mode are written but not yet exercised.
+Status: the on-demand rewrite is tested across two sources with a no-skill control, in fresh sessions that had not seen the skill written. The always-on mode and the voice rules are written but not yet exercised.
 
 ## How it works
 
-No subprocess and no second model. `SKILL.md` gives Claude an explicit cut list (restated questions, work narration, double hedges, empty transitions, closing offers to help) plus structural rules (one idea per sentence, active voice, lists over prose), then a verification step: every number, path, and code block from the source must appear in the output.
+No subprocess and no second model. `SKILL.md` gives the model four voice rules, an explicit cut list (restated questions, work narration, double hedges, empty transitions, closing offers to help), and writing rules (one idea per sentence, lists over prose). For on-demand compression it adds a verification step: every number, path, and code block from the source must appear in the output.
 
 Deletion is checkable in a way that "be more concise" is not. A model asked to shorten its own writing will trim clauses everywhere and quietly lose a caveat; a model handed a list of specific constructions to delete can be checked against it. That's the whole design — the rules are concrete enough to audit.
 
 ## Anti-goals
 
-Brevity never overrides correctness. The skill will not drop a caveat that changes what you should do, compress a command you have to run, or turn a clear explanation into shorthand you have to decode. Fewer words, same clarity. When the two conflict, being right wins and the reply gets a sentence longer.
+Correctness outranks format. The skill will not drop a caveat that changes what you should do, compress a command you have to run, or turn a clear explanation into shorthand you have to decode. Fewer words, same clarity. When the two conflict, being right wins and the reply gets a sentence longer.
 
-## Credit
-
-The one-shot-rewrite shape is borrowed from [nobuzz](https://github.com/adnanakil/nobuzz), which pipes replies through a second model to strip Claude's voice. This one targets length instead of tone and does it in-process, so there's nothing to install.
+Direct is not the same as rude. It is about structure — answer first, no padding — not about tone toward you.
 
 ## License
 
