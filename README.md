@@ -35,27 +35,40 @@ Standing mode applies the rules while writing rather than compressing afterward:
 
 ## Before / after
 
-A real run, not a mock-up: this is the skill compressing an actual reply from the session that built it — a commit-completion message, at the default `terse` tier.
+A real run at the default `terse` tier, on a genuinely padded draft reply (363 words):
 
-**Before (248 words):**
+**Before:**
 
-> Committed as `anshuman <anshumanp06@gmail.com>` — the personal identity took effect. [...] The design bet is that **deletion is auditable where "be concise" isn't**. Instead of asking Claude to shorten, `SKILL.md` lists specific constructions to delete — restated questions, work narration, double hedges, empty transitions, closing offers — then requires a verification pass that every number, path, and code block from the source survives. [...] Two things to know: **Untested.** I validated the frontmatter parses and the name is kebab-case, but I haven't installed it and run `/llm-brevity` on a real reply. Worth trying via `cp -r llm-brevity/llm-brevity ~/.claude/skills/` before you publish it. **No remote.** Your `gh` is authed as the work account **anshuman-oda** over HTTPS, so `gh repo create` would push there. Since the repo pins your personal key, add the remote manually once you've made the GitHub repo [...]
+> Great question! You're asking about why the login endpoint has started returning intermittent 500s, and that's definitely a common issue that can be tricky to track down. Let me take a look at the auth service and see what I can find. [...] First, and this is really the load-bearing issue here, the connection pool in `authService.ts:88` is configured with a maximum of 10 connections. That might sound like it would generally be enough, but it's worth noting that the session lookup on every request holds a connection for the entire duration of the bcrypt comparison. [...] And third — here's the kicker — the health check endpoint at `/healthz` also uses the same shared pool. [...] To summarize what we've covered: the connection pool is too small for the workload [...] Let me know if you'd like me to dig deeper into any of these!
 
-**After (118 words):**
+**After (109 words):**
 
-> Committed as `anshuman <anshumanp06@gmail.com>`.
+> Three interacting causes:
 >
-> Self-contained rewrite, no external CLI. One-shot compression plus `--on` standing mode. Three tiers: `tight` ~50%, `terse` ~25% default, `telegram` 1–3 sentences.
+> 1. The connection pool in `authService.ts:88` maxes at 10 connections. The session lookup holds a connection for the whole bcrypt comparison, so each request occupies one for ~200ms.
+> 2. No queue timeout. On pool exhaustion requests wait indefinitely instead of failing fast, so load compounds rather than degrading.
+> 3. `/healthz` shares the pool. When it saturates, the health check times out, the load balancer pulls the instance, and traffic shifts to the remaining instances — hence the cascade.
 >
-> - **Untested.** Frontmatter parses and the name is kebab-case; I haven't run `/llm-brevity` on a real reply.
-> - **No remote.** `gh` is authed as **anshuman-oda** over HTTPS, so `gh repo create` would push there. Add manually:
->   ```
->   git remote add origin git@github.com:anshuman13/llm-brevity.git && git push -u origin main
->   ```
+> Fix: move the bcrypt comparison outside the connection scope, raise pool max to 50, add a 5 second queue timeout, give the health check its own single-connection pool.
 
-248 words to 118 — 48%, against a 25% target. That gap is the useful part: the source was largely file trees, paths, and a git command, all protected content that is never compressed. The prose hit the target; the protected content set the floor. Tier targets therefore apply to prose only, which is a correction the first test run produced.
+363 to 109 words, 30%. Every fact survived: the file path, all four numbers, the endpoint, and all four parts of the recommended fix.
 
-Content check passed: every file path, the commit identity, `anshuman-oda`, the git remote command, and all three tier numbers survived.
+## What testing showed
+
+Measured against a control — a second agent given the same text and only the instruction "make it shorter," no skill:
+
+| Source | Baseline (no skill) | Skill (`terse`) |
+|---|---|---|
+| Padded 363-word draft | 116 words (32%) | 109 words (30%) |
+| Already-edited 251-word reply | 210 words (84%) | 205 words (82%) |
+
+Two things worth being honest about:
+
+**The skill does not compress much harder than simply asking for concision.** On both sources it beat the control by about two percentage points. If you want shorter output and you remember to ask for it, asking works nearly as well.
+
+**Its value is the guardrail, not the ratio.** Both skill runs were lossless by construction — the cut list is a fixed set of constructions, and step 5 requires verifying every number, path, and code block survived. The control runs were lossless by luck. On text where a caveat is load-bearing, that difference is the point, and it is also why the skill is worth invoking on someone else's output rather than your own.
+
+**Already-edited text barely compresses, and that is correct.** At 82% the skill is close to a no-op, because there was no filler to remove. A brevity tool that hit 25% on that source would be deleting facts.
 
 ## Install
 
@@ -67,7 +80,7 @@ cp -r llm-brevity/llm-brevity ~/.claude/skills/
 
 Requirements: Claude Code. No external CLI, no API key, no network calls — the skill is a single `SKILL.md`.
 
-Status: tested once, on the run shown above. The `terse` tier and one-shot rewrite work; `tight`, `telegram`, and standing mode are written but not yet exercised.
+Status: the `terse` tier and one-shot rewrite are tested across two sources with a no-skill control, in fresh sessions that had not seen the skill written. `tight`, `telegram`, and standing mode are written but not yet exercised.
 
 ## How it works
 
