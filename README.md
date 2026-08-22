@@ -35,21 +35,27 @@ Standing mode applies the rules while writing rather than compressing afterward:
 
 ## Before / after
 
-**Before:**
+A real run, not a mock-up: this is the skill compressing an actual reply from the session that built it — a commit-completion message, at the default `terse` tier.
 
-> Great question! You're asking about why the retry logic is failing. Let me take a look at the sync pipeline to understand what's happening here. So, after digging into this, I found that there are essentially three separate issues that are all contributing to the problem. First, and this is really the load-bearing issue, `syncQueue.ts:142` is swallowing the `ETIMEDOUT` error instead of re-queuing the job. Second, it's worth noting that the backoff caps out at 2 seconds, which is generally going to be too low for mobile networks. And third — here's the kicker — the dedupe key includes a timestamp, which means retries are never actually deduplicated. Let me know if you'd like me to dig deeper into any of these!
+**Before (248 words):**
 
-**After (`/llm-brevity`):**
+> Committed as `anshuman <anshumanp06@gmail.com>` — the personal identity took effect. [...] The design bet is that **deletion is auditable where "be concise" isn't**. Instead of asking Claude to shorten, `SKILL.md` lists specific constructions to delete — restated questions, work narration, double hedges, empty transitions, closing offers — then requires a verification pass that every number, path, and code block from the source survives. [...] Two things to know: **Untested.** I validated the frontmatter parses and the name is kebab-case, but I haven't installed it and run `/llm-brevity` on a real reply. Worth trying via `cp -r llm-brevity/llm-brevity ~/.claude/skills/` before you publish it. **No remote.** Your `gh` is authed as the work account **anshuman-oda** over HTTPS, so `gh repo create` would push there. Since the repo pins your personal key, add the remote manually once you've made the GitHub repo [...]
 
-> Three bugs in the retry logic:
+**After (118 words):**
+
+> Committed as `anshuman <anshumanp06@gmail.com>`.
 >
-> - `syncQueue.ts:142` swallows `ETIMEDOUT` instead of re-queuing the job.
-> - Backoff caps at 2s, too low for mobile networks.
-> - The dedupe key includes a timestamp, so retries are never deduplicated.
+> Self-contained rewrite, no external CLI. One-shot compression plus `--on` standing mode. Three tiers: `tight` ~50%, `terse` ~25% default, `telegram` 1–3 sentences.
 >
-> Fix: strip the timestamp from the key, raise the cap to 30s, re-throw the timeout.
+> - **Untested.** Frontmatter parses and the name is kebab-case; I haven't run `/llm-brevity` on a real reply.
+> - **No remote.** `gh` is authed as **anshuman-oda** over HTTPS, so `gh repo create` would push there. Add manually:
+>   ```
+>   git remote add origin git@github.com:anshuman13/llm-brevity.git && git push -u origin main
+>   ```
 
-Same three bugs, same file path, same numbers. 104 words to 48.
+248 words to 118 — 48%, against a 25% target. That gap is the useful part: the source was largely file trees, paths, and a git command, all protected content that is never compressed. The prose hit the target; the protected content set the floor. Tier targets therefore apply to prose only, which is a correction the first test run produced.
+
+Content check passed: every file path, the commit identity, `anshuman-oda`, the git remote command, and all three tier numbers survived.
 
 ## Install
 
@@ -60,6 +66,8 @@ cp -r llm-brevity/llm-brevity ~/.claude/skills/
 ```
 
 Requirements: Claude Code. No external CLI, no API key, no network calls — the skill is a single `SKILL.md`.
+
+Status: tested once, on the run shown above. The `terse` tier and one-shot rewrite work; `tight`, `telegram`, and standing mode are written but not yet exercised.
 
 ## How it works
 

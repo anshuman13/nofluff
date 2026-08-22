@@ -29,6 +29,8 @@ Examples: `/llm-brevity` (terse, last reply) · `/llm-brevity telegram` · `/llm
 
 `tight` and `terse` are lossless on content. `telegram` is explicitly lossy — it is the one tier permitted to drop facts, and only because the user asked for the answer alone.
 
+Targets apply to **prose**, not to the whole reply. Protected content — code blocks, file paths, commands, tables — is never compressed, so a reply that is mostly code has a floor well above its tier target. Hitting 50% on a code-heavy reply whose prose was fully stripped is a success, not a miss. Measure the prose, not the total.
+
 ## The cut list
 
 Delete on sight, at every tier:
@@ -58,7 +60,7 @@ Delete on sight, at every tier:
 1. Take the source text — the pasted argument, or your own previous reply reproduced faithfully.
 2. Delete everything on the cut list. Do not rewrite yet; just remove.
 3. Apply the structural rules to what remains.
-4. Check the result against the tier's target length. If it is still over, you are keeping filler — re-run step 2 rather than cutting content.
+4. Check the *prose* against the tier's target. If it is still over, you are keeping filler — re-run step 2 rather than cutting content. Do not cut protected content to hit a number; if the reply is mostly code, the target does not apply.
 5. Verify nothing was lost: every number, path, command, and code block in the source appears in the output (except in `telegram`, which may drop them).
 6. Output the compressed text as your entire reply. Do not introduce it, explain what you cut, or comment on the improvement — that would re-add exactly what you removed. A one-line lead like `terse:` is the most you may add, and even that is optional.
 
