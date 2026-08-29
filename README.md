@@ -93,6 +93,31 @@ No subprocess and no second model. `SKILL.md` gives the model four voice rules, 
 
 Deletion is checkable in a way that "be more concise" is not. A model asked to shorten its own writing will trim clauses everywhere and quietly lose a caveat; a model handed a list of specific constructions to delete can be checked against it. That's the whole design — the rules are concrete enough to audit.
 
+## Improving the skill
+
+The repo carries a second skill, [`nofluff-improve`](nofluff-improve/SKILL.md), that edits
+the first one from evidence. The pattern is Warp's: a base skill holding the domain rules,
+and an improver skill that reads accumulated feedback and proposes targeted edits to it.
+
+Feedback comes from two places. [`FEEDBACK.md`](FEEDBACK.md) collects misfires as they
+happen in real sessions, quoting the actual output. GitHub issues and PR comments on this
+repo carry the rest. The improver reads both, weights detailed reports over volume, and
+opens a PR against `nofluff/SKILL.md` — it never commits to `main`, because a bad edit to
+the voice rules degrades every later reply silently.
+
+```
+/nofluff-improve
+```
+
+It runs on demand, not on a schedule. Two entries reporting the same failure count as a
+pattern worth acting on; one is an anecdote. The exception is a losslessness failure —
+dropping a fact, caveat, number, or code block breaks the skill's core promise, so one
+credible report is enough.
+
+A run that concludes "nothing cleared the bar" is a successful run. The skill is short on
+purpose, and a document that grows a clause per complaint is one the model skims instead
+of follows.
+
 ## Anti-goals
 
 Correctness outranks format. The skill will not drop a caveat that changes what you should do, compress a command you have to run, or turn a clear explanation into shorthand you have to decode. Fewer words, same clarity. When the two conflict, being right wins and the reply gets a sentence longer.
